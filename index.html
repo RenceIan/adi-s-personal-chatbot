@@ -129,15 +129,16 @@
 				const openTasks = tasks.filter((item) => !item.done).map((item) => item.text);
 				return openTasks.length ? `You have ${openTasks.length} open task${openTasks.length === 1 ? '' : 's'}: ${openTasks.join('; ')}.` : 'You have no open tasks.';
 			}
+			if (lowerText.includes('joke') || lowerText.includes('make me laugh')) return 'Why did the developer go broke? Because they used up all their cache.';
 			if (lowerText.includes('plan')) return 'Let’s make it practical: define the goal, list the first three actions, then choose one small action to complete today.';
 			if (lowerText.includes('idea') || lowerText.includes('brainstorm')) return 'Try starting with a repeated annoyance. The best first ideas often come from a problem you already understand well.';
 			if (lowerText.includes('explain')) return 'Absolutely. Share the concept or phrase, and I’ll break it into a clear example and a few simple steps.';
 			return 'That sounds interesting. Give me a little more detail, and I’ll help you turn it into a clear next step.';
 		}
 
-		function isLocalTaskCommand(text) {
+		function isLocalCommand(text) {
 			const lowerText = text.toLowerCase();
-			return lowerText.includes('add a task') || lowerText.includes('add task') || lowerText.includes('create a task') || lowerText.includes('remind me to') || lowerText.includes('add to my todo') || lowerText.includes('what are my tasks') || lowerText.includes('show my tasks');
+			return lowerText.includes('add a task') || lowerText.includes('add task') || lowerText.includes('create a task') || lowerText.includes('remind me to') || lowerText.includes('add to my todo') || lowerText.includes('what are my tasks') || lowerText.includes('show my tasks') || lowerText.includes('joke') || lowerText.includes('make me laugh');
 		}
 
 		async function getAIReply(text) {
@@ -172,7 +173,7 @@
 			messages.scrollTop = messages.scrollHeight;
 			window.setTimeout(async () => {
 				typing.remove();
-				const reply = isLocalTaskCommand(cleanText) ? replyTo(cleanText) : await getAIReply(cleanText);
+				const reply = isLocalCommand(cleanText) ? replyTo(cleanText) : await getAIReply(cleanText);
 				addMessage(reply, 'assistant');
 				sendButton.disabled = false;
 				input.focus();
