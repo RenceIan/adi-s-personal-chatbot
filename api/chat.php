@@ -8,7 +8,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$token = getenv('GITHUB_TOKEN');
+$localConfig = __DIR__ . '/config.php';
+$config = is_file($localConfig) ? require $localConfig : [];
+$token = $config['github_token'] ?? getenv('GITHUB_TOKEN');
 if (!$token) {
     http_response_code(503);
     echo json_encode(['error' => 'GITHUB_TOKEN is not configured in PHP.']);
