@@ -10,10 +10,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $localConfig = __DIR__ . '/config.php';
 $config = is_file($localConfig) ? require $localConfig : [];
-$token = $config['github_token'] ?? getenv('GITHUB_TOKEN');
+$geminiKey = $config['gemini_api_key'] ?? getenv('GEMINI_API_KEY');
+$openAIKey = $config['openai_api_key'] ?? getenv('OPENAI_API_KEY');
+$githubToken = $config['github_token'] ?? getenv('GITHUB_TOKEN');
+$token = $geminiKey ?: ($openAIKey ?: $githubToken);
 if (!$token) {
     http_response_code(503);
-    echo json_encode(['error' => 'GITHUB_TOKEN is not configured in PHP.']);
+    echo json_encode(['error' => 'No AI provider key is configured in PHP.']);
     exit;
 }
 
@@ -25,28 +28,40 @@ if (!is_array($messages) || count($messages) === 0) {
     exit;
 }
 
-$payload = json_encode([
-    'model' => 'openai/gpt-4o-mini',
-    'messages' => array_merge([
-        [
-            'role' => 'system',
-            'content' => "You are Adi's Personal AI, a practical personal copilot. Be concise, helpful, and honest about what you can do. When the user asks for a task, help them break it into clear next steps."
-        ]
-    ], array_slice($messages, -12)),
-    'temperature' => 0.7,
-    'max_tokens' => 700
-]);
+$systemPrompt = "You are Adi's Personal AI, a practical personal copilot. Be concise, helpful, and honest about what you can do. When the user asks for a task, help them break it into clear next steps.";
+$recentMessages = array_slice($messages, -12);
 
-$curl = curl_init('https://models.github.ai/inference/chat/completions');
+if ($geminiKey) {
+    $contents = array_map(function ($message) {
+        return [
+            'role' => $message['role'] === 'assistant' ? 'model' : 'user',
+            'parts' => [['text' => $message['content']]]
+        ];
+    }, $recentMessages);
+    $payload = json_encode([
+        'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
+        'contents' => $contents,
+        'generationConfig' => ['temperature' => 0.7, 'maxOutputTokens' => 700]
+    ]);
+    $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . urlencode($geminiKey);
+    $headers = ['Content-Type: application/json', 'Accept: application/json'];
+} else {
+    $payload = json_encode([
+        'model' => $openAIKey ? 'gpt-4o-mini' : 'openai/gpt-4o-mini',
+        'messages' => array_merge([['role' => 'system', 'content' => $systemPrompt]], $recentMessages),
+        'temperature' => 0.7,
+        'max_tokens' => 700
+    ]);
+    $endpoint = $openAIKey ? 'https://api.openai.com/v1/chat/completions' : 'https://models.github.ai/inference/chat/completions';
+    $headers = ['Content-Type: application/json', 'Authorization: Bearer ' . $token, 'Accept: application/json'];
+}
+
+$curl = curl_init($endpoint);
 curl_setopt_array($curl, [
     CURLOPT_POST => true,
     CURLOPT_POSTFIELDS => $payload,
     CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . $token,
-        'Accept: application/json'
-    ],
+    CURLOPT_HTTPHEADER => $headers,
     CURLOPT_TIMEOUT => 30
 ]);
 $response = curl_exec($curl);
@@ -56,15 +71,18 @@ curl_close($curl);
 
 if ($response === false) {
     http_response_code(502);
-    echo json_encode(['error' => 'GitHub Models request failed: ' . $curlError]);
+    echo json_encode(['error' => 'AI provider request failed: ' . $curlError]);
     exit;
 }
 
 $data = json_decode($response, true);
-if ($status < 200 || $status >= 300 || !isset($data['choices'][0]['message']['content'])) {
+$reply = $geminiKey
+    ? ($data['candidates'][0]['content']['parts'][0]['text'] ?? null)
+    : ($data['choices'][0]['message']['content'] ?? null);
+if ($status < 200 || $status >= 300 || !$reply) {
     http_response_code(502);
-    echo json_encode(['error' => $data['error']['message'] ?? 'GitHub Models returned an unexpected response.']);
+    echo json_encode(['error' => $data['error']['message'] ?? $data['error']['status'] ?? 'AI provider returned an unexpected response.']);
     exit;
 }
 
-echo json_encode(['reply' => $data['choices'][0]['message']['content']]);
+echo json_encode(['reply' => $reply]);
