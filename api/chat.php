@@ -28,7 +28,7 @@ if (isset($_FILES['attachment'])) {
         echo json_encode(['error' => 'Attachments must be smaller than 10 MB.']);
         exit;
     }
-    $allowedTypes = ['application/pdf', 'text/plain', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    $allowedTypes = ['application/pdf', 'text/plain', 'text/html', 'text/css', 'application/json', 'image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     $fileType = (new finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
     if (!in_array($fileType, $allowedTypes, true)) {
         http_response_code(400);
