@@ -58,9 +58,12 @@
 					<button class="prompt" type="button">Explain a concept</button>
 				</div>
 				<form class="composer" id="chatForm">
+					<label class="attach" for="attachmentInput" title="Attach an image, PDF, or text file" aria-label="Attach a file">＋</label>
+					<input id="attachmentInput" type="file" accept="image/*,.pdf,.txt">
 					<textarea id="messageInput" rows="1" placeholder="Message Adi's Personal AI..." aria-label="Message Adi's Personal AI"></textarea>
 					<button class="send" id="sendButton" type="submit" aria-label="Send message">↑</button>
 				</form>
+				<div class="attachment-name" id="attachmentName" aria-live="polite"></div>
 				<p class="note">Adi's Personal AI can make mistakes. Check important information.</p>
 			</div>
 		</section>
@@ -73,16 +76,19 @@
 		const sendButton = document.querySelector('#sendButton');
 		const newChat = document.querySelector('#newChat');
 		const prompts = document.querySelectorAll('.prompt');
+		const attachmentInput = document.querySelector('#attachmentInput');
+		const attachmentName = document.querySelector('#attachmentName');
 		const taskList = document.querySelector('#taskList');
 		const taskCount = document.querySelector('#taskCount');
 		let tasks = JSON.parse(localStorage.getItem('adiTasks') || '[]');
 		const conversation = [];
 
-		function addMessage(text, type) {
+		function addMessage(text, type, attachment) {
 			const article = document.createElement('article');
 			article.className = `message ${type}`;
+			const attachmentLabel = attachment ? `<small class="message-attachment">Attached: ${escapeHtml(attachment.name)}</small>` : '';
 			article.innerHTML = type === 'user'
-				? `<div class="avatar">You</div><div class="message-body"><p>${escapeHtml(text)}</p></div>`
+				? `<div class="avatar">You</div><div class="message-body"><p>${escapeHtml(text)}</p>${attachmentLabel}</div>`
 				: `<div class="avatar">A</div><div class="message-body"><div class="message-name">Adi's Personal AI</div><p>${escapeHtml(text)}</p></div>`;
 			messages.append(article);
 			messages.scrollTop = messages.scrollHeight;
@@ -141,13 +147,15 @@
 			return lowerText.includes('add a task') || lowerText.includes('add task') || lowerText.includes('create a task') || lowerText.includes('remind me to') || lowerText.includes('add to my todo') || lowerText.includes('what are my tasks') || lowerText.includes('show my tasks') || lowerText.includes('joke') || lowerText.includes('make me laugh');
 		}
 
-		async function getAIReply(text) {
+		async function getAIReply(text, attachment) {
 			conversation.push({ role: 'user', content: text });
 			try {
+				const formData = new FormData();
+				formData.append('messages', JSON.stringify(conversation));
+				if (attachment) formData.append('attachment', attachment);
 				const response = await fetch('api/chat.php', {
 					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ messages: conversation })
+					body: formData
 				});
 				const data = await response.json();
 				if (!response.ok) throw new Error(data.error || 'The AI service is unavailable.');
@@ -159,11 +167,13 @@
 			}
 		}
 
-		function submitMessage(text) {
+		function submitMessage(text, attachment = null) {
 			const cleanText = text.trim();
-			if (!cleanText || sendButton.disabled) return;
-			addMessage(cleanText, 'user');
+			if ((!cleanText && !attachment) || sendButton.disabled) return;
+			addMessage(cleanText || 'Please review this attachment.', 'user', attachment);
 			input.value = '';
+			attachmentInput.value = '';
+			attachmentName.textContent = '';
 			input.style.height = 'auto';
 			sendButton.disabled = true;
 			const typing = document.createElement('article');
@@ -173,7 +183,7 @@
 			messages.scrollTop = messages.scrollHeight;
 			window.setTimeout(async () => {
 				typing.remove();
-				const reply = isLocalCommand(cleanText) ? replyTo(cleanText) : await getAIReply(cleanText);
+				const reply = isLocalCommand(cleanText) ? replyTo(cleanText) : await getAIReply(cleanText || 'Please review the attached file.', attachment);
 				addMessage(reply, 'assistant');
 				sendButton.disabled = false;
 				input.focus();
@@ -182,7 +192,11 @@
 
 		form.addEventListener('submit', (event) => {
 			event.preventDefault();
-			submitMessage(input.value);
+			submitMessage(input.value, attachmentInput.files[0] || null);
+		});
+
+		attachmentInput.addEventListener('change', () => {
+			attachmentName.textContent = attachmentInput.files[0] ? `Attached: ${attachmentInput.files[0].name}` : '';
 		});
 
 		input.addEventListener('input', () => {
