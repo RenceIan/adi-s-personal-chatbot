@@ -43,7 +43,7 @@ if ($geminiKey) {
         'contents' => $contents,
         'generationConfig' => ['temperature' => 0.7, 'maxOutputTokens' => 700]
     ]);
-    $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . urlencode($geminiKey);
+    $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=' . urlencode($geminiKey);
     $headers = ['Content-Type: application/json', 'Accept: application/json'];
 } else {
     $payload = json_encode([
